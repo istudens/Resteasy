@@ -12,6 +12,7 @@ import org.jboss.resteasy.test.providers.jackson2.whitelist.model.AbstractVehicl
 import org.jboss.resteasy.test.providers.jackson2.whitelist.model.TestPolymorphicType;
 import org.jboss.resteasy.test.providers.jackson2.whitelist.model.air.Aircraft;
 import org.jboss.resteasy.test.providers.jackson2.whitelist.model.land.Automobile;
+import org.jboss.resteasy.test.providers.jackson2.whitelist.model.sea.Watercraft;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
@@ -57,7 +58,15 @@ public class WhiteListPolymorphicTypeValidatorTest {
         contextParam.put("jackson.deserialization.whitelist.allowIfBaseType.prefix", Automobile.class.getPackage().getName());
         contextParam.put("jackson.deserialization.whitelist.allowIfSubType.prefix", Automobile.class.getPackage().getName());
         return TestUtil.finishContainerPrepare(war, contextParam, JaxRsActivator.class, TestRESTService.class,
-                TestPolymorphicType.class, AbstractVehicle.class, Automobile.class, Aircraft.class);
+                TestPolymorphicType.class, AbstractVehicle.class, Automobile.class, Aircraft.class, Watercraft.class);
+    }
+
+    @Deployment(name = "default-systemproperties-only")
+    public static Archive<?> deploySystemPropertiesOnly() {
+        WebArchive war = TestUtil.prepareArchive("systempropertiesonly");
+        war.addClass(WhiteListPolymorphicTypeValidatorTest.class);
+        return TestUtil.finishContainerPrepare(war, null, JaxRsActivator.class, TestRESTService.class,
+                TestPolymorphicType.class, AbstractVehicle.class, Automobile.class, Aircraft.class, Watercraft.class);
     }
 
     @Before
@@ -70,8 +79,19 @@ public class WhiteListPolymorphicTypeValidatorTest {
         client.close();
     }
 
-    private String generateURL(String path) {
-        return PortProviderUtil.generateURL(path, WhiteListPolymorphicTypeValidatorTest.class.getSimpleName());
+    /**
+     * @tpTestDetails Client sends POST request with polymorphic type enabled by configuration of {@link WhiteListPolymorphicTypeValidatorBuilder}.
+     * See {@code -Djackson.deserialization.whitelist.allowIfBaseType.prefix} and {@code -Djackson.deserialization.whitelist.allowIfSubType.prefix} system properties at testsuite/integration-tests/pom.xml file which enables it.
+     * @tpPassCrit The resource returns successfully, deserialization passed.
+     * @tpSince RESTEasy 4.5.0
+     */
+    @Test
+    public void testGoodEnabledBysystemProperty() throws Exception {
+        String response = sendPost(new TestPolymorphicType(new Watercraft()), "systempropertiesonly");
+        logger.info("response: " + response);
+        Assert.assertNotNull(response);
+        Assert.assertTrue(response.contains("Response code: " + HttpResponseCodes.SC_CREATED));
+        Assert.assertTrue(response.contains("Created"));
     }
 
     /**
@@ -108,13 +128,17 @@ public class WhiteListPolymorphicTypeValidatorTest {
     }
 
     private String sendPost(TestPolymorphicType t) throws Exception {
+        return sendPost(t, WhiteListPolymorphicTypeValidatorTest.class.getSimpleName());
+    }
+
+    private String sendPost(TestPolymorphicType t, String testName) throws Exception {
 
         logger.info("Creating JSON test data");
         String jsonData = createJSONString(t);
 
         logger.info("jsonData: " + jsonData);
 
-        String urlString = generateURL("/test/post");
+        String urlString = PortProviderUtil.generateURL("/test/post", testName);
         logger.info("POST data to : " + urlString);
         URL url = new URL(urlString);
         URLConnection con = url.openConnection();
